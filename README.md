@@ -1,4 +1,4 @@
-[![Loophole — The AI IDE that thinks while you code](#) 
+![Loophole — The AI IDE that thinks while you code](#) 
 
 [Website](https://getloophole.in) 
 ·
