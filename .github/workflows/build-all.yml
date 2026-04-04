@@ -1,0 +1,85 @@
+name: Build All OS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            suffix: win32-x64
+            installer: win32-x64-user-setup
+          - os: ubuntu-latest
+            suffix: linux-x64
+            installer: linux-x64-build-deb
+          - os: macos-latest
+            suffix: darwin-x64
+            installer: darwin-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Build Dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3
+
+      - name: Install dependencies
+        run: npm install
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build React Components
+        run: npm run buildreact
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Compile
+        run: npm run compile
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Build App
+        run: npm run gulp -- loophole-${{ matrix.suffix }}
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+          
+      - name: Build Installer/Package (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm run gulp -- loophole-linux-x64-prepare-deb
+          npm run gulp -- loophole-${{ matrix.installer }}
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Build Installer/Package (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npm run gulp -- loophole-${{ matrix.installer }}
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Move Build Output
+        run: mv ../Loophole-${{ matrix.suffix }} ./Loophole-${{ matrix.suffix }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loophole-${{ matrix.os }}
+          path: |
+            Loophole-${{ matrix.suffix }}/
+            .build/${{ matrix.suffix }}/
+            .build/linux/deb/

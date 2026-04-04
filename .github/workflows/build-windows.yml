@@ -1,0 +1,59 @@
+name: Build Windows v2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Compile
+        run: npm run compile
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Build Windows App
+        run: npm run gulp -- loophole-win32-x64
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      # Build the installer BEFORE renaming — the gulpfile looks for
+      # Loophole-win32-x64 (from product.nameShort), so we must not
+      # rename the folder until after this step.
+      - name: Build Windows Installer
+        run: npm run gulp -- loophole-win32-x64-user-setup
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      # Now it's safe to rename for the artifact upload
+      - name: Rename output folder
+        run: |
+          if (Test-Path "Loophole-win32-x64") {
+            Rename-Item -Path "Loophole-win32-x64" -NewName "VSCode-win32-x64"
+          } else {
+            Write-Host "Loophole-win32-x64 not found, skipping rename"
+            dir . | Where-Object { $_.Name -like "*win32*" }
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loophole-windows
+          path: |
+            VSCode-win32-x64/
+            .build/win32-x64/user-setup/
+          retention-days: 5
